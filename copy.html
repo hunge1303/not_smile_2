@@ -85,7 +85,7 @@
     <div id="flash-overlay" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:white;z-index:5000;pointer-events:none;opacity:0;"></div>
 
     <div id="tutorial-modal" onclick="this.classList.remove('active')">
-        <img src="YOUR_TUTORIAL_IMAGE_URL.jpg" alt="Tutorial Image" class="modal-content" onclick="event.stopPropagation()">
+        <img src="aa5d2468-537d-4b73-a9d9-fa1c103b074c.jpg" alt="Tutorial Image" class="modal-content" onclick="event.stopPropagation()">
     </div>
 
     <div id="start-screen" class="screen active">
@@ -121,7 +121,7 @@
 
     <div id="final-reward" class="screen">
         <div style="display:flex;justify-content:center;align-items:center;height:80vh;">
-            <img id="birthday-gif" src="YOUR_BIRTHDAY_GIF_URL.gif" alt="Happy Birthday!" style="max-width:90%;max-height:80vh;border-radius:12px;">
+            <img id="birthday-gif" src="CMSN.gif" alt="Happy Birthday!" style="max-width:90%;max-height:80vh;border-radius:12px;">
         </div>
     </div>
 
@@ -173,6 +173,7 @@
             bgMusic.muted = !bgMusic.muted;
             document.getElementById('mute-btn').innerText = bgMusic.muted ? '🔇' : '🔊';
         }
+        let completed = 0;
         let finished = { 1:false, 2:false, 3:false, 4:false, 5:false, 6:false };
         let activeLevel = 0;
         let cleanupCurrentLevel = null;
@@ -744,11 +745,11 @@
 
             function spawnPatternProjectiles(idx, phase) {
                 if (idx === 0) {
-                    // RAIN: dense vertical rain from random x
-                    if (phase % 2 === 0) {
-                        for (let i=0; i<5; i++) {
+                    // RAIN: light vertical rain from random x
+                    if (phase % 5 === 0) {
+                        for (let i=0; i<2; i++) {
                             const bx = Math.random()*590;
-                            projectiles.push(makeProj('bullet', bx, -10, 0, 4+Math.random()*2));
+                            projectiles.push(makeProj('bullet', bx, -10, 0, 3+Math.random()*1.5));
                         }
                     }
                 } else if (idx === 1) {
