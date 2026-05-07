@@ -89,17 +89,17 @@
     </div>
 
     <div id="start-screen" class="screen active">
-        <h1 style="font-size: 3rem; text-shadow: 0 0 10px rgba(217, 119, 54, 0.5);">Birthday Quest</h1>
-        <button onclick="showScreen('main-page')">Enter the Hub</button>
+        <h1 style="font-size: 3rem; text-shadow: 0 0 10px rgba(217, 119, 54, 0.5);">From NOT Smile...</h1>
+        <button onclick="showScreen('main-page')">May this journey lead us starward</button>
     </div>
 
     <div id="main-page" class="screen">
         <h2>Mission Hub</h2>
         <div class="level-grid">
-            <div id="lvl-1" class="level-node" onclick="loadLevel(1)">1: The Maze</div>
+            <div id="lvl-1" class="level-node" onclick="loadLevel(1)">1: The Looker</div>
             <div id="lvl-2" class="level-node" onclick="loadLevel(2)">2: Mini Sudoku</div>
             <div id="lvl-3" class="level-node" onclick="loadLevel(3)">3: Memory Match</div>
-            <div id="lvl-4" class="level-node" onclick="loadLevel(4)">4: The Cryptic</div>
+            <div id="lvl-4" class="level-node" onclick="loadLevel(4)">4: SecondCryptic</div>
             <div id="lvl-5" class="level-node" onclick="loadLevel(5)">5: Wordle</div>
             <div id="boss-node" class="level-node" onclick="loadLevel(6)">FINAL BOSS: OVERTALE</div>
         </div>
@@ -114,7 +114,7 @@
     </div>
 
     <div id="message-screen" class="screen">
-        <h1 id="msg-sender" style="color: var(--accent);">Friend</h1>
+        <h1 id="msg-sender" style="color: var(--accent);"></h1>
         <p id="msg-body" style="font-size: 1.2rem;"></p>
         <button onclick="showScreen('main-page')">Back to Hub</button>
     </div>
@@ -162,7 +162,7 @@
         let musicStarted = false;
         function startMusic() {
             if (!musicStarted) {
-                bgMusic.volume = 0.4;
+                bgMusic.volume = 0.3;
                 bgMusic.play().catch(()=>{});
                 musicStarted = true;
             }
@@ -179,9 +179,10 @@
         let cleanupCurrentLevel = null;
         
         let wGuess = ""; let wRow = 0;
+        const friends = ["hunge", "kat", "mai", "okla", "yins"];
         const friendMsgs = ["Chat, congrats on finishing the first year in Singapore. Insane year yk, we were able to travel across the whole country (except for changi i guess). we got to the hangout, top 10 best buy of the decade, absolute treat to go there with u. Anyhow, happy birthday to u, best of luck for the next year, and hopefully many more trips to come. (sorry for the “the witness” knock-off)", 
         "Perfect logic!", 
-        "You remember!", 
+        "Hiiiii ông bạn,\nIt's been a true honor knowing you and your journey. You never cease to inspire me with your enthusiasm and knowledge; and I’m sure that many think likewise. Hope you’ll notice and give yourself some acknowledgement for that. \nShould you encounter hardships and obstacles, do bear in mind that we are all here for you. Ấn call anytime nha bro!\nTuổi mới chúc ltb thật vững vàng và có những giấc ngủ thật ngon ☀️", 
         "Petrichor found!", 
         "Happy birthday bro. T quý c lắm. Tuổi mới chúc c ngủ ngon 🛌🏻💤"];
 
@@ -242,7 +243,7 @@
                     if (n <= 5) {
                         completed++;
                         document.getElementById('lvl-'+n).classList.add('completed');
-                        document.getElementById('msg-sender').innerText = "Friend " + n;
+                        document.getElementById('msg-sender').innerText = friends[n-1];
                         document.getElementById('msg-body').innerText = friendMsgs[n-1];
                         if (completed === 5) document.getElementById('boss-node').style.display = 'block';
                         showScreen('message-screen');
@@ -453,7 +454,7 @@
                                 if (checkDotSegregation(path)) {
                                     winLevel(1);
                                 } else {
-                                    fb.innerText = "Dots not separated! Try again.";
+                                    fb.innerText = "Remember the rules:))! Try again.";
                                     fb.style.color = "var(--error)";
                                     path = [{x:0, y:sz}];
                                 }
