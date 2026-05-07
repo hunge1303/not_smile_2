@@ -1,0 +1,608 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Birthday Quest: The Final Version</title>
+    <style>
+        :root {
+            --bg-color: #0b0b0b;
+            --text-color: #f0f0f0;
+            --accent: #4a90e2;
+            --success: #2e7d32;
+            --error: #c62828;
+        }
+        body { 
+            font-family: 'Segoe UI', sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0; display: flex; justify-content: center; align-items: center;
+            height: 100vh; overflow: hidden;
+        }
+        .screen { display: none; text-align: center; width: 95%; max-width: 800px; position: relative; }
+        .active { display: block; animation: fadeIn 0.5s; }
+        
+        button {
+            padding: 12px 24px; font-size: 1rem; cursor: pointer;
+            background: var(--accent); border: none; color: white;
+            border-radius: 5px; margin-top: 20px; transition: 0.3s;
+        }
+
+        /* Dashboard */
+        .level-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; margin-top: 20px; }
+        .level-node {
+            padding: 20px; background: #222; border: 2px solid #444;
+            cursor: pointer; border-radius: 8px; transition: 0.2s;
+        }
+        .level-node.completed { background: var(--success); border-color: #4caf50; pointer-events: none; }
+        #boss-node { background: #4a0000; border: 2px solid #ff0000; display: none; grid-column: span 3; }
+
+        /* Level 1: Witness Maze */
+        #witness-container { background: #222; padding: 20px; border-radius: 15px; display: inline-block; margin-bottom: 20px; }
+        canvas { background: #111; border-radius: 5px; cursor: crosshair; }
+
+        /* Level 2: Sudoku */
+        #sudoku-board { display: grid; grid-template-columns: repeat(6, 45px); justify-content: center; margin: 20px auto; width: fit-content; border: 4px solid #fff; }
+        .sudoku-cell { width: 45px; height: 45px; text-align: center; font-size: 1.2rem; background: #222; color: #fff; border: 1px solid #555; outline: none; }
+        .sudoku-cell:focus { background: #333; }
+        .s-border-right { border-right: 4px solid #fff; }
+        .s-border-bottom { border-bottom: 4px solid #fff; }
+
+        /* Level 3: Memory Match */
+        #mem-grid { display: grid; grid-template-columns: repeat(4, 80px); gap: 10px; justify-content: center; margin: 20px auto; }
+        .mem-card { width: 80px; height: 80px; background: #444; cursor: pointer; position: relative; transform-style: preserve-3d; transition: transform 0.4s; border-radius: 8px; }
+        .mem-card.flipped { transform: rotateY(180deg); }
+        .mem-card .front, .mem-card .back { position: absolute; width: 100%; height: 100%; backface-visibility: hidden; border-radius: 8px; }
+        .mem-card .front { background: #555; border: 2px solid #777; }
+        .mem-card .back { background-size: cover; transform: rotateY(180deg); border: 2px solid #fff; }
+
+        /* Level 4: Cryptic Boxes */
+        .cryptic-box-container { display: flex; gap: 8px; justify-content: center; margin: 20px 0; }
+        .cryptic-char { width: 40px; height: 50px; background: transparent; border: 2px solid #555; color: white; text-align: center; font-size: 1.5rem; text-transform: uppercase; outline: none; }
+        .cryptic-char:focus { border-color: var(--accent); }
+
+        /* Level 5: Wordle */
+        #w-grid { display: grid; gap: 5px; justify-content: center; margin: 20px auto; }
+        .w-row { display: grid; grid-template-columns: repeat(5, 45px); gap: 5px; }
+        .w-cell { border: 2px solid #444; width: 45px; height: 45px; display: flex; align-items: center; justify-content: center; font-size: 1.5rem; font-weight: bold; text-transform: uppercase; }
+        .w-correct { background: #538d4e; border-color: #538d4e; }
+        .w-present { background: #b59f3b; border-color: #b59f3b; }
+        .w-absent { background: #3a3a3c; border-color: #3a3a3c; }
+
+        /* Level 6: Overtale */
+        #ot-container { width: 600px; height: 400px; border: 2px solid white; position: relative; overflow: hidden; background: black; margin: 0 auto; }
+        #ot-player { width: 50px; height: 50px; position: absolute; z-index: 10; transition: opacity 0.2s; }
+        .ot-bullet { width: 10px; height: 10px; background: white; position: absolute; border-radius: 50%; }
+        .ot-heart { width: 25px; height: 25px; background: #ff0000; position: absolute; clip-path: polygon(50% 0%, 100% 35%, 82% 100%, 50% 80%, 18% 100%, 0% 35%); }
+        .invulnerable { opacity: 0.4; }
+
+        /* Confetti */
+        .confetti { position: absolute; width: 10px; height: 10px; z-index: 1000; pointer-events: none; }
+
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    </style>
+</head>
+<body>
+
+    <div id="start-screen" class="screen active">
+        <h1>Birthday Quest</h1>
+        <button onclick="showScreen('main-page')">Enter the Hub</button>
+    </div>
+
+    <div id="main-page" class="screen">
+        <h2>Mission Hub</h2>
+        <div class="level-grid">
+            <div id="lvl-1" class="level-node" onclick="loadLevel(1)">1: The Maze</div>
+            <div id="lvl-2" class="level-node" onclick="loadLevel(2)">2: Mini Sudoku</div>
+            <div id="lvl-3" class="level-node" onclick="loadLevel(3)">3: Memory Match</div>
+            <div id="lvl-4" class="level-node" onclick="loadLevel(4)">4: The Cryptic</div>
+            <div id="lvl-5" class="level-node" onclick="loadLevel(5)">5: Wordle</div>
+            <div id="boss-node" class="level-node" onclick="loadLevel(6)">FINAL BOSS: OVERTALE</div>
+        </div>
+    </div>
+
+    <div id="game-screen" class="screen">
+        <h3 id="game-title">Level</h3>
+        <div id="game-container"></div>
+        <p id="game-feedback" style="font-weight: bold; margin-top: 10px; min-height: 1.5em;"></p>
+        <div id="game-controls"></div>
+        <button onclick="exitToHub()" style="background:#444">Exit to Hub</button>
+    </div>
+
+    <div id="message-screen" class="screen">
+        <h1 id="msg-sender">Friend</h1>
+        <p id="msg-body">Message Content</p>
+        <button onclick="showScreen('main-page')">Back to Hub</button>
+    </div>
+
+    <div id="final-reward" class="screen">
+        <h1>HAPPY BIRTHDAY!</h1>
+        <div id="photo-reveal">🎉 [Photo Gallery Revealed] 🎉</div>
+    </div>
+
+    <script>
+        let completed = 0;
+        let finished = { 1:false, 2:false, 3:false, 4:false, 5:false, 6:false };
+        
+        // Clean up variables
+        let cleanupCurrentLevel = null;
+        let activeLevel = 0;
+
+        const friendMsgs = [
+            "Path found! You always find a way.",
+            "Perfect logic! Have a great day.",
+            "You remember the best of us.",
+            "You solved the riddle of petrichor!",
+            "You always make us SMILE."
+        ];
+
+        function showScreen(id) {
+            document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+            document.getElementById(id).classList.add('active');
+        }
+
+        function exitToHub() {
+            if (cleanupCurrentLevel) {
+                cleanupCurrentLevel();
+                cleanupCurrentLevel = null;
+            }
+            activeLevel = 0;
+            showScreen('main-page');
+        }
+
+        // --- Confetti Logic ---
+        function triggerConfetti() {
+            for (let i = 0; i < 50; i++) {
+                const c = document.createElement('div');
+                c.className = 'confetti';
+                c.style.left = Math.random() * 100 + 'vw';
+                c.style.top = '-10px';
+                c.style.backgroundColor = `hsl(${Math.random() * 360}, 100%, 50%)`;
+                c.style.transform = `rotate(${Math.random() * 360}deg)`;
+                document.body.appendChild(c);
+                
+                const anim = c.animate([
+                    { transform: `translate3d(0,0,0) rotate(0deg)`, opacity: 1 },
+                    { transform: `translate3d(${(Math.random()-0.5)*200}px, 100vh, 0) rotate(720deg)`, opacity: 0 }
+                ], { duration: 2000 + Math.random() * 1000, easing: 'cubic-bezier(0, .9, .57, 1)' });
+                anim.onfinish = () => c.remove();
+            }
+        }
+
+        function winLevel(n) {
+            if (!finished[n]) {
+                finished[n] = true;
+                triggerConfetti();
+                document.getElementById('game-feedback').innerText = "CORRECT!";
+                document.getElementById('game-feedback').style.color = "var(--success)";
+                
+                if (cleanupCurrentLevel) { cleanupCurrentLevel(); cleanupCurrentLevel = null; }
+
+                setTimeout(() => {
+                    if (n <= 5) {
+                        completed++;
+                        document.getElementById('lvl-'+n).classList.add('completed');
+                        document.getElementById('msg-sender').innerText = "Friend " + n;
+                        document.getElementById('msg-body').innerText = friendMsgs[n-1];
+                        if (completed === 5) document.getElementById('boss-node').style.display = 'block';
+                        showScreen('message-screen');
+                    } else {
+                        showScreen('final-reward');
+                    }
+                }, 1500);
+            }
+        }
+
+        function loadLevel(n) {
+            if (cleanupCurrentLevel) cleanupCurrentLevel(); // Ensure previous events are killed
+            activeLevel = n;
+            
+            const container = document.getElementById('game-container');
+            const controls = document.getElementById('game-controls');
+            const feedback = document.getElementById('game-feedback');
+            
+            document.getElementById('game-title').innerText = "Level " + n;
+            feedback.innerText = "";
+            feedback.style.color = "var(--text-color)";
+            container.innerHTML = "";
+            controls.innerHTML = "";
+
+            if (n === 1) { 
+                container.innerHTML = `<div id="witness-container"><canvas id="w-canvas" width="300" height="300"></canvas></div><p>Trace the path from Yellow to Red</p>`; 
+                initWitness(); 
+            }
+            if (n === 2) { 
+                container.innerHTML = `<div id="sudoku-board"></div>`; 
+                controls.innerHTML = `<button onclick="checkSudoku()">Check Answers</button>`;
+                initSudoku(); 
+            }
+            if (n === 3) { 
+                container.innerHTML = `<div id="mem-grid"></div>`; 
+                initMemory(); 
+            }
+            if (n === 4) { 
+                container.innerHTML = `
+                    <p>"Earthy scent from lab dish shortened task (9)"</p>
+                    <div class="cryptic-box-container" id="cryptic-boxes"></div>
+                    <p style="font-size: 0.8rem; color: #888;">Press Enter to Check</p>`;
+                initCryptic(); 
+            }
+            if (n === 5) { 
+                container.innerHTML = `<div id="w-grid"></div>`; 
+                initWordle(); 
+            }
+            if (n === 6) { 
+                container.innerHTML = `
+                    <div id="ot-container">
+                        <div id="ot-timer" style="color:white; position:absolute; top:10px; right:10px;">120</div>
+                        <div id="ot-player"><img src="https://i.imgur.com/qCG5mB1.gif" width="100%"></div>
+                    </div><p>Collect 5 hearts. SHIFT to dash (Invulnerable).</p>`;
+                initOvertale(); 
+            }
+            showScreen('game-screen');
+        }
+
+        // --- Level 1: Witness Maze ---
+        function initWitness() {
+            const c = document.getElementById('w-canvas'), ctx = c.getContext('2d');
+            const gridSize = 3, spacing = 80, offset = 30;
+            let drawing = false, path = [{x:0, y:gridSize}]; 
+            
+            const draw = () => {
+                ctx.clearRect(0,0,300,300);
+                // Draw Grid Lines
+                ctx.strokeStyle = "#444"; ctx.lineWidth = 12; ctx.lineCap = "round";
+                for(let i=0; i<=gridSize; i++){
+                    ctx.beginPath(); ctx.moveTo(offset, i*spacing+offset); ctx.lineTo(gridSize*spacing+offset, i*spacing+offset); ctx.stroke();
+                    ctx.beginPath(); ctx.moveTo(i*spacing+offset, offset); ctx.lineTo(i*spacing+offset, gridSize*spacing+offset); ctx.stroke();
+                }
+                // End points
+                ctx.fillStyle = "#ff0"; ctx.beginPath(); ctx.arc(offset, gridSize*spacing+offset, 15, 0, 7); ctx.fill();
+                ctx.fillStyle = "#f00"; ctx.beginPath(); ctx.arc(gridSize*spacing+offset, offset, 15, 0, 7); ctx.fill();
+                // Draw Path
+                if(path.length > 0){
+                    ctx.strokeStyle = "#ff0"; ctx.beginPath();
+                    ctx.moveTo(path[0].x*spacing+offset, path[0].y*spacing+offset);
+                    path.forEach(p => ctx.lineTo(p.x*spacing+offset, p.y*spacing+offset));
+                    ctx.stroke();
+                }
+            };
+
+            const handleMouseDown = (e) => {
+                const r = c.getBoundingClientRect();
+                if(Math.hypot(e.clientX-r.left-offset, e.clientY-r.top-(gridSize*spacing+offset)) < 25) drawing = true;
+            };
+
+            const handleMouseMove = (e) => {
+                if(!drawing) return;
+                const r = c.getBoundingClientRect();
+                const mx = (e.clientX-r.left-offset)/spacing, my = (e.clientY-r.top-offset)/spacing;
+                const gx = Math.round(mx), gy = Math.round(my);
+                if(gx >= 0 && gx <= gridSize && gy >= 0 && gy <= gridSize){
+                    const last = path[path.length-1];
+                    if(Math.hypot(mx-gx, my-gy) < 0.3 && (gx !== last.x || gy !== last.y)){
+                        if(Math.abs(gx-last.x) + Math.abs(gy-last.y) === 1){
+                            path.push({x:gx, y:gy});
+                            if(gx === gridSize && gy === 0) { drawing = false; winLevel(1); }
+                        }
+                    }
+                }
+                draw();
+            };
+
+            const handleMouseUp = () => { drawing = false; if(!finished[1]) {path = [{x:0, y:gridSize}]; draw();} };
+
+            c.addEventListener('mousedown', handleMouseDown);
+            window.addEventListener('mousemove', handleMouseMove);
+            window.addEventListener('mouseup', handleMouseUp);
+            draw();
+
+            cleanupCurrentLevel = () => {
+                window.removeEventListener('mousemove', handleMouseMove);
+                window.removeEventListener('mouseup', handleMouseUp);
+            };
+        }
+
+        // --- Level 2: Sudoku ---
+        // Mathematically valid 6x6 Sudoku Array
+        const sudokuSol = [
+            1, 2, 3, 4, 5, 6,
+            4, 5, 6, 1, 2, 3,
+            2, 3, 1, 5, 6, 4,
+            5, 6, 4, 2, 3, 1,
+            3, 1, 2, 6, 4, 5,
+            6, 4, 5, 3, 1, 2
+        ];
+        // 0 represents empty boxes
+        const sudokuPuz = [
+            1, 0, 3, 0, 5, 0,
+            0, 5, 0, 1, 0, 3,
+            0, 0, 1, 0, 0, 4,
+            5, 0, 0, 2, 0, 0,
+            0, 1, 0, 0, 4, 0,
+            0, 4, 0, 3, 0, 2
+        ];
+
+        function initSudoku() {
+            const board = document.getElementById('sudoku-board');
+            for(let i = 0; i < 36; i++) {
+                let cell = document.createElement('input');
+                cell.className = 'sudoku-cell';
+                cell.maxLength = 1;
+                cell.dataset.index = i;
+                
+                // Add vertical and horizontal thick borders for 2x3 grid separation
+                if ((i + 1) % 3 === 0 && (i + 1) % 6 !== 0) cell.classList.add('s-border-right');
+                if (Math.floor(i / 6) === 1 || Math.floor(i / 6) === 3) cell.classList.add('s-border-bottom');
+                
+                if (sudokuPuz[i] !== 0) {
+                    cell.value = sudokuPuz[i];
+                    cell.disabled = true;
+                    cell.style.color = "#aaa";
+                }
+                
+                // Allow only numbers 1-6
+                cell.addEventListener('input', (e) => {
+                    cell.value = cell.value.replace(/[^1-6]/g, '');
+                });
+
+                board.appendChild(cell);
+            }
+        }
+
+        // Global function called by the button
+        function checkSudoku() {
+            const cells = document.querySelectorAll('.sudoku-cell');
+            let isCorrect = true;
+            let isFilled = true;
+
+            cells.forEach((cell, i) => {
+                if (cell.value === "") {
+                    isFilled = false;
+                } else if (parseInt(cell.value) !== sudokuSol[i]) {
+                    isCorrect = false;
+                }
+            });
+
+            const fb = document.getElementById('game-feedback');
+            if (!isFilled) {
+                fb.innerText = "Please fill in all the squares.";
+                fb.style.color = "var(--text-color)";
+            } else if (!isCorrect) {
+                fb.innerText = "Incorrect logic. Try again.";
+                fb.style.color = "var(--error)";
+            } else {
+                winLevel(2);
+            }
+        }
+
+        // --- Level 3: Memory Match ---
+        function initMemory() {
+            const grid = document.getElementById('mem-grid');
+            const colors = ["#f00", "#0f0", "#00f", "#ff0", "#0ff", "#f0f"];
+            let cards = [...colors, ...colors].sort(() => Math.random() - 0.5);
+            let flippedCards = [];
+            let matches = 0;
+
+            cards.forEach((color) => {
+                let card = document.createElement('div');
+                card.className = 'mem-card';
+                card.innerHTML = `
+                    <div class="front"></div>
+                    <div class="back" style="background-color: ${color}"></div>
+                `;
+                
+                card.addEventListener('click', () => {
+                    if (flippedCards.length < 2 && !card.classList.contains('flipped')) {
+                        card.classList.add('flipped');
+                        flippedCards.push(card);
+                        
+                        if (flippedCards.length === 2) {
+                            const color1 = flippedCards[0].querySelector('.back').style.backgroundColor;
+                            const color2 = flippedCards[1].querySelector('.back').style.backgroundColor;
+                            
+                            if (color1 === color2) {
+                                matches++;
+                                flippedCards = [];
+                                if (matches === 6) setTimeout(() => winLevel(3), 500);
+                            } else {
+                                setTimeout(() => {
+                                    flippedCards.forEach(c => c.classList.remove('flipped'));
+                                    flippedCards = [];
+                                }, 800);
+                            }
+                        }
+                    }
+                });
+                grid.appendChild(card);
+            });
+        }
+
+        // --- Level 4: Minute Cryptic ---
+        function initCryptic() {
+            const container = document.getElementById('cryptic-boxes');
+            const feedback = document.getElementById('game-feedback');
+            
+            for(let i=0; i<9; i++) {
+                const input = document.createElement('input');
+                input.className = 'cryptic-char';
+                input.maxLength = 1;
+                
+                input.addEventListener('input', (e) => {
+                    input.value = input.value.replace(/[^a-zA-Z]/g, '');
+                    if(e.target.value && i < 8) container.children[i+1].focus();
+                });
+                
+                input.addEventListener('keydown', (e) => {
+                    if(e.key === 'Backspace' && !e.target.value && i > 0) {
+                        container.children[i-1].focus();
+                    }
+                    if(e.key === 'Enter') {
+                        const answer = Array.from(container.children).map(el => el.value).join('').toUpperCase();
+                        if(answer === "PETRICHOR") {
+                            winLevel(4);
+                        } else {
+                            feedback.innerText = "INCORRECT. TRY AGAIN."; 
+                            feedback.style.color = "var(--error)";
+                        }
+                    }
+                });
+                container.appendChild(input);
+            }
+            // Auto focus first box
+            setTimeout(() => container.children[0].focus(), 100);
+        }
+
+        // --- Level 5: Wordle ---
+        function initWordle() {
+            const grid = document.getElementById('w-grid');
+            const targetWord = "SMILE";
+            let currentRow = 0;
+            let currentGuess = "";
+
+            // Build Grid
+            for(let i=0; i<6; i++) {
+                let row = document.createElement('div');
+                row.className = 'w-row';
+                for(let j=0; j<5; j++) {
+                    let cell = document.createElement('div');
+                    cell.className = 'w-cell';
+                    row.appendChild(cell);
+                }
+                grid.appendChild(row);
+            }
+
+            // Scoped Keyboard Handler
+            const handleWordleInput = (e) => {
+                if (activeLevel !== 5) return; // Failsafe
+                
+                const rows = document.querySelectorAll('.w-row');
+                if (currentRow >= 6) return;
+                const cells = rows[currentRow].querySelectorAll('.w-cell');
+
+                if (e.key === "Enter" && currentGuess.length === 5) {
+                    let targetArray = targetWord.split("");
+                    
+                    // First pass: Correct matches
+                    for(let i=0; i<5; i++) {
+                        if(currentGuess[i] === targetArray[i]) { 
+                            cells[i].classList.add('w-correct'); 
+                            targetArray[i] = null; 
+                        }
+                    }
+                    
+                    // Second pass: Present or Absent
+                    for(let i=0; i<5; i++) {
+                        if(!cells[i].classList.contains('w-correct')) {
+                            let idx = targetArray.indexOf(currentGuess[i]);
+                            if(idx > -1) { 
+                                cells[i].classList.add('w-present'); 
+                                targetArray[idx] = null; 
+                            } else {
+                                cells[i].classList.add('w-absent');
+                            }
+                        }
+                    }
+
+                    if (currentGuess === targetWord) {
+                        winLevel(5);
+                    } else {
+                        currentRow++;
+                        currentGuess = "";
+                    }
+                } else if (e.key === "Backspace" && currentGuess.length > 0) {
+                    currentGuess = currentGuess.slice(0, -1);
+                    cells[currentGuess.length].innerText = "";
+                } else if (/^[a-zA-Z]$/.test(e.key) && currentGuess.length < 5) {
+                    cells[currentGuess.length].innerText = e.key.toUpperCase();
+                    currentGuess += e.key.toUpperCase();
+                }
+            };
+
+            // Attach listener specifically for this level
+            document.addEventListener('keydown', handleWordleInput);
+            
+            // Clean it up when leaving
+            cleanupCurrentLevel = () => {
+                document.removeEventListener('keydown', handleWordleInput);
+            };
+        }
+
+        // --- Level 6: Overtale Final Boss ---
+        function initOvertale() {
+            const container = document.getElementById('ot-container');
+            const player = document.getElementById('ot-player');
+            let px=275, py=300, heartsCount=0, bullets=[], startTime=Date.now(), isAlive=true;
+            const keys = {}; 
+            
+            const handleKeyDown = (e) => keys[e.key] = true;
+            const handleKeyUp = (e) => keys[e.key] = false;
+            
+            window.addEventListener('keydown', handleKeyDown);
+            window.addEventListener('keyup', handleKeyUp);
+
+            function spawnHeart() {
+                let h = document.createElement('div'); h.className='ot-heart';
+                let x=Math.random()*550, y=Math.random()*350; h.style.left=x+'px'; h.style.top=y+'px';
+                container.appendChild(h); return {el:h, x, y};
+            }
+            let targetHeart = spawnHeart();
+
+            const gameLoop = setInterval(() => {
+                if(!isAlive || activeLevel !== 6) return clearInterval(gameLoop);
+                
+                // Timer Logic
+                let elapsed = Math.floor((Date.now() - startTime) / 1000);
+                document.getElementById('ot-timer').innerText = 120 - elapsed;
+                if(elapsed >= 120) { isAlive=false; alert("Time up!"); loadLevel(6); }
+
+                // Movement & Dash
+                let speed = keys['Shift'] ? 10 : 5;
+                let isInvulnerable = !!keys['Shift'];
+                
+                if (isInvulnerable) player.classList.add('invulnerable');
+                else player.classList.remove('invulnerable');
+
+                if(keys['ArrowUp']) py = Math.max(0, py - speed); 
+                if(keys['ArrowDown']) py = Math.min(350, py + speed);
+                if(keys['ArrowLeft']) px = Math.max(0, px - speed); 
+                if(keys['ArrowRight']) px = Math.min(550, px + speed);
+                
+                player.style.left = px + 'px'; 
+                player.style.top = py + 'px';
+
+                // Collectibles
+                if(Math.hypot(px - targetHeart.x, py - targetHeart.y) < 40) {
+                    targetHeart.el.remove(); heartsCount++;
+                    if(heartsCount < 5) targetHeart = spawnHeart(); 
+                    else { isAlive = false; winLevel(6); }
+                }
+
+                // Bullets
+                if(Math.random() < 0.08) {
+                    let b = document.createElement('div'); b.className = 'ot-bullet';
+                    let bx = Math.random() * 600; b.style.left = bx + 'px'; 
+                    container.appendChild(b);
+                    bullets.push({el: b, x: bx, y: 0});
+                }
+                
+                bullets.forEach((b, i) => {
+                    b.y += 5; b.el.style.top = b.y + 'px';
+                    // Collision check
+                    if(!isInvulnerable && Math.hypot((px + 25) - b.x, (py + 25) - b.y) < 25) { 
+                        isAlive = false; alert("Hit! Try again."); loadLevel(6); 
+                    }
+                    if(b.y > 400) { b.el.remove(); bullets.splice(i, 1); }
+                });
+            }, 20);
+
+            // Clean up intervals and listeners if user exits to hub
+            cleanupCurrentLevel = () => {
+                clearInterval(gameLoop);
+                window.removeEventListener('keydown', handleKeyDown);
+                window.removeEventListener('keyup', handleKeyUp);
+            };
+        }
+    </script>
+</body>
+</html>

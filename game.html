@@ -1,0 +1,677 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Thứ hai của Oxford 2225</title>
+    <style>
+        body {
+            background: black;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            font-family: 'Arial', sans-serif;
+        }
+        #gameContainer {
+            width: 600px;
+            height: 400px;
+            border: 2px solid white;
+            position: relative;
+            overflow: hidden;
+            margin-top: 0;
+        }
+        #player {
+            width: 60px;
+            height: 60px;
+            position: absolute;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        #player img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+        }
+        .bullet {
+            width: 10px;
+            height: 10px;
+            background: white;
+            position: absolute;
+            border-radius: 50%;
+        }
+        #boss {
+            width: 150px;
+            height: 150px;
+            position: absolute;
+            top: 50px;
+            left: 250px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        #boss img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+        }
+        #healthBar {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            display: flex;
+            gap: 10px;
+        }
+        .heart {
+            width: 15px;
+            height: 15px;
+            position: relative;
+            transform: rotate(-45deg);
+            background-color: red;
+            display: inline-block;
+        }
+        .heart:before,
+        .heart:after {
+            content: '';
+            width: 15px;
+            height: 15px;
+            border-radius: 50%;
+            background-color: red;
+            position: absolute;
+        }
+        .heart:before {
+            top: -7.5px;
+            left: 0;
+        }
+        .heart:after {
+            top: 0;
+            right: -7.5px;
+        }
+        .heart.empty {
+            background-color: #666;
+        }
+        .heart.empty:before,
+        .heart.empty:after {
+            background-color: #666;
+        }
+        #scoreContainer {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            color: white;
+            font-size: 20px;
+        }
+        #gameTitle {
+            color: white;
+            font-size: 32px;
+            text-align: center;
+            font-weight: bold;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+            margin-bottom: 20px;
+            width: 100%;
+        }
+        #startScreen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.9);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        #startButton {
+            padding: 15px 30px;
+            font-size: 24px;
+            background: #444;
+            color: white;
+            border: 2px solid white;
+            cursor: pointer;
+            margin-top: 20px;
+            transition: background 0.3s;
+        }
+        #startButton:hover {
+            background: #666;
+        }
+        .obstacle {
+            position: absolute;
+            background: white;
+            width: 10px;
+            height: 200px;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div id="gameTitle">Trải nghiệm thứ hai của Oxford 2225</div>
+    <div id="gameContainer">
+        <div id="startScreen">
+            <h2 style="color: white; margin-bottom: 20px;">Tránh mất tập trung bằng cách tránh đạn</h2>
+            <p style="color: white; margin-bottom: 10px;">Sử dụng phím mũi tên để di chuyển</p>
+            <button id="startButton">Vào tiết</button>
+        </div>
+        <div id="boss"><img src="https://i.imgur.com/h21Zgg3.png" style="width: 100%; height: 100%;"></div>
+        <div id="player"><img src="https://i.imgur.com/qCG5mB1.gif" style="width: 100%; height: 100%;"></div>
+        <div id="healthBar">
+            <div class="heart"></div>
+            <div class="heart"></div>
+            <div class="heart"></div>
+            <div class="heart"></div>
+            <div class="heart"></div>
+        </div>
+        <div id="scoreContainer">Thời gian học: <span id="score">0</span></div>
+    </div>
+
+    <div style="margin-top: 20px;">
+        <button id="nextPageButton" style="
+            padding: 10px 20px;
+            font-size: 18px;
+            background: #444;
+            color: white;
+            border: 2px solid white;
+            cursor: pointer;
+            transition: background 0.3s;
+            border-radius: 5px;
+        ">Quay lại Gallery</button>
+    </div>
+
+    <script>
+        const player = document.getElementById('player');
+        const boss = document.getElementById('boss');
+        const gameContainer = document.getElementById('gameContainer');
+        const healthBar = document.getElementById('healthBar');
+        const hearts = healthBar.getElementsByClassName('heart');
+        const scoreElement = document.getElementById('score');
+        const startScreen = document.getElementById('startScreen');
+        const startButton = document.getElementById('startButton');
+        
+        let playerX = 290;
+        let playerY = 300;
+        let playerHealth = 5;
+        let bullets = [];
+        let score = 0;
+        let gameStartTime = Date.now();
+        let gameActive = false;
+        let questionActive = false;
+        let pauseStartTime = 0;
+        let totalPausedTime = 0;
+        let obstacles = [];
+        const OBSTACLE_SPEED = 3;
+        const OBSTACLE_SPAWN_INTERVAL = 3000;
+
+        // Player position
+        player.style.left = playerX + 'px';
+        player.style.top = playerY + 'px';
+
+        // Update the keys object
+        const keys = {
+            ArrowUp: false,    // Changed from w
+            ArrowLeft: false,  // Changed from a
+            ArrowDown: false,  // Changed from s
+            ArrowRight: false  // Changed from d
+        };
+
+        // Update the keydown/keyup event listeners
+        document.addEventListener('keydown', (e) => {
+            if (keys.hasOwnProperty(e.key)) {
+                keys[e.key] = true;
+            }
+        });
+
+        document.addEventListener('keyup', (e) => {
+            if (keys.hasOwnProperty(e.key)) {
+                keys[e.key] = false;
+            }
+        });
+
+        // Update the updatePlayerPosition function
+        function updatePlayerPosition() {
+            const speed = 5;
+            if (keys.ArrowLeft) playerX = Math.max(0, playerX - speed);          // Left
+            if (keys.ArrowRight) playerX = Math.min(540, playerX + speed);       // Right
+            if (keys.ArrowUp) playerY = Math.max(0, playerY - speed);           // Up
+            if (keys.ArrowDown) playerY = Math.min(340, playerY + speed);       // Down
+            
+            player.style.left = playerX + 'px';
+            player.style.top = playerY + 'px';
+        }
+
+        // Modified createBullet function with faster speeds
+        function createBullet(x, y, dx, dy) {
+            const bullet = document.createElement('div');
+            bullet.className = 'bullet';
+            bullet.style.left = x + 'px';
+            bullet.style.top = y + 'px';
+            gameContainer.appendChild(bullet);
+            // Increasing bullet speed by multiplying dx and dy by 1.5
+            bullets.push({ element: bullet, x, y, dx: dx * 1.5, dy: dy * 1.5 });
+        }
+
+        // Add these questions at the start of your script
+        const questions = [
+            {
+                question: "Quá trình làm thay đổi nội năng của vật bằng cách cho nó tiếp xúc với vật khác khi ",
+                options: ["nhiệt độ của chúng bằng nhau gọi là sự trao đổi công.", "có sự chênh lệch nhiệt độ giữa chúng gọi là sự nhận công.", "có sự chênh lệch nhiệt độ giữa chúng gọi là sự truyền nhiệt.", "nhiệt độ của chúng bằng nhau gọi là sự truyền nhiệt."],
+                correct: 2  
+            },
+            {
+                question: "Các hạt nhân đồng vị có cùng",
+                options: ["số neutron.", "điện tích.", "số khối.", "khối lượng."],
+                correct: 1  
+            },
+            {
+                question: "Nếu nhiệt truyền từ một cái bàn sang một khối băng chuyển động ngang trượt trên mặt bàn thì điều nào sau đây phải đúng?",
+                options: ["Mặt bàn gồ ghề và có ma sát giữa mặt bàn và mặt băng.", "Khối băng lạnh hơn cái bàn.", "Khối băng đang chuyển pha.", "Khối băng đang ở nhiệt độ điểm ba."],
+                correct: 1  
+            },
+            {
+                question: "Khi nói về khí lí tưởng, phát biểu nào sau đây là sai?",
+                options: ["Các phân tử khí lí tường va chạm đàn hồi vào thành bình chứa gây nên áp suất.", "Các phân tử khí lí tưởng chỉ tương tác với nhau khi va chạm.", "Thể tích tổng cộng của các phân tử khí lí tưởng có thể bỏ qua.", "Có thể bỏ qua khối lượng của các phân tử khí lí tưởng khi xét nhiệt độ của khối khí."],
+                correct: 3  
+            },
+            {
+                question: "Các đại lượng nào sau đây được gọi là thông số xác định trạng thái của lượng khí xác định?",
+                options: ["Thể tích, áp suất, khối lượng.", "Áp suất, thể tích, nhiệt độ.", "Thể tích, khối lượng, số lượng phân từ.", "Nhiệt độ, thể tích, trọng lượng khối khí."],
+                correct: 1
+            }
+        ];
+
+        // Add this function to create and show the question dialog
+        function showQuestion(callback) {
+            if (questionActive) return;
+            questionActive = true;
+            gameActive = false; // Pause the game
+            pauseStartTime = Date.now(); // Record when we paused
+            
+            const questionObj = questions[Math.floor(Math.random() * questions.length)];
+            const dialog = document.createElement('div');
+            dialog.style.cssText = `
+                position: absolute;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+                background: rgba(0, 0, 0, 0.9);
+                padding: 20px;
+                border: 2px solid white;
+                color: white;
+                text-align: center;
+                z-index: 1000;
+            `;
+            
+            dialog.innerHTML = `
+                <p>${questionObj.question}</p>
+                ${questionObj.options.map((option, index) => `
+                    <button style="
+                        margin: 5px;
+                        padding: 5px 10px;
+                        background: #444;
+                        color: white;
+                        border: 1px solid white;
+                        cursor: pointer;
+                        display: block;
+                        width: 100%;
+                    ">${option}</button>
+                `).join('')}
+            `;
+            
+            gameContainer.appendChild(dialog);
+            
+            const buttons = dialog.getElementsByTagName('button');
+            Array.from(buttons).forEach((button, index) => {
+                button.addEventListener('click', () => {
+                    const isCorrect = index === questionObj.correct;
+                    dialog.remove();
+                    questionActive = false;
+                    
+                    // Calculate how long we were paused and add to total
+                    const pauseDuration = Date.now() - pauseStartTime;
+                    totalPausedTime += pauseDuration;
+                    
+                    // Resume the game after handling the answer
+                    gameActive = true;
+                    
+                    callback(isCorrect);
+                });
+                
+                // Hover effect
+                button.addEventListener('mouseover', () => {
+                    button.style.background = '#666';
+                });
+                button.addEventListener('mouseout', () => {
+                    button.style.background = '#444';
+                });
+            });
+        }
+
+        // Modify the collision detection part in updateBullets
+        function updateBullets() {
+            if (!gameActive || questionActive) return; // Don't update bullets if game is paused or question is active
+            
+            bullets.forEach((bullet, index) => {
+                bullet.x += bullet.dx;
+                bullet.y += bullet.dy;
+                
+                // Remove bullets that are off screen
+                if (bullet.x < 0 || bullet.x > 600 || bullet.y < 0 || bullet.y > 400) {
+                    bullet.element.remove();
+                    bullets.splice(index, 1);
+                    return;
+                }
+
+                // Collision detection
+                const playerCenterX = playerX + 30;
+                const playerCenterY = playerY + 30;
+                const bulletCenterX = bullet.x + 5;
+                const bulletCenterY = bullet.y + 5;
+                
+                const distance = Math.sqrt(
+                    Math.pow(playerCenterX - bulletCenterX, 2) + 
+                    Math.pow(playerCenterY - bulletCenterY, 2)
+                );
+                
+                if (!questionActive && distance < 35) {
+                    bullet.element.remove();
+                    bullets.splice(index, 1);
+                    showQuestion((isCorrect) => {
+                        if (!isCorrect) {
+                            playerHealth--;
+                            updateHearts();
+
+                            if (playerHealth <= 0) {
+                                gameActive = false;
+                                alert(`Học hành kiểu gì đấy hả!? Chỉ tập trung được mỗi ${score} giây!`);
+                                location.reload();
+                            }
+                        }
+                    });
+                }
+
+                bullet.element.style.left = bullet.x + 'px';
+                bullet.element.style.top = bullet.y + 'px';
+            });
+        }
+
+        // Modified boss attack patterns
+        function bossAttack() {
+            if (!gameActive || questionActive) return; // Don't create new bullets if game is paused
+            
+            const pattern = Math.floor(Math.random() * 5);
+            
+            switch(pattern) {
+                case 0: // Circular pattern
+                    for (let i = 0; i < 12; i++) { // Increased from 8 to 12 bullets
+                        const angle = (i / 12) * Math.PI * 2;
+                        createBullet(
+                            300, 100,
+                            Math.cos(angle) * 4,
+                            Math.sin(angle) * 4
+                        );
+                    }
+                    break;
+                case 1: // Aimed at player
+                    const dx = playerX - 300;
+                    const dy = playerY - 100;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+                    createBullet(300, 100, (dx / dist) * 5, (dy / dist) * 5);
+                    break;
+                case 2: // Random spread
+                    for (let i = 0; i < 5; i++) { // Increased from 3 to 5 bullets
+                        createBullet(
+                            300, 100,
+                            Math.random() * 8 - 4,
+                            Math.random() * 8 - 4
+                        );
+                    }
+                    break;
+                case 3: // X pattern
+                    for (let i = 0; i < 4; i++) {
+                        const angle = (i / 4) * Math.PI * 2;
+                        createBullet(300, 100, Math.cos(angle) * 4, Math.sin(angle) * 4);
+                        createBullet(300, 100, -Math.cos(angle) * 4, -Math.sin(angle) * 4);
+                    }
+                    break;
+                case 4: // Spiral pattern
+                    for (let i = 0; i < 8; i++) {
+                        const angle = (i / 8) * Math.PI * 2;
+                        setTimeout(() => {
+                            if (gameActive) {
+                                createBullet(
+                                    300, 100,
+                                    Math.cos(angle) * 4,
+                                    Math.sin(angle) * 4
+                                );
+                            }
+                        }, i * 50);
+                    }
+                    break;
+            }
+        }
+
+        // Modify the updateScore function
+        function updateScore() {
+            if (!gameActive) return;
+            
+            const currentTime = Date.now();
+            // Subtract total paused time from elapsed time
+            const elapsedTime = Math.floor((currentTime - gameStartTime - totalPausedTime) / 1000);
+            
+            score = elapsedTime * 90; // 90 points per second
+            
+            if (score >= 5400) { // End game when reaching 5400 points
+                score = 5400; // Cap the score at 5400
+                gameActive = false;
+                alert(`Đã học hết 5400 giây = 2 tiết lý rồi!`);
+                location.reload();
+                return;
+            }
+            
+            scoreElement.textContent = score;
+        }
+
+        // Add this new function to update hearts display
+        function updateHearts() {
+            Array.from(hearts).forEach((heart, index) => {
+                if (index < playerHealth) {
+                    heart.classList.remove('empty');
+                } else {
+                    heart.classList.add('empty');
+                }
+            });
+        }
+
+        // Add this function to create obstacles
+        function createObstacle(fromLeft) {
+            const obstacle = document.createElement('div');
+            obstacle.className = 'obstacle';
+            
+            // Random height between 50 and 150 pixels
+            const height = Math.random() * 100 + 100;
+            obstacle.style.height = height + 'px';
+            
+            // Random vertical position
+            const maxTop = 400 - height; // gameContainer height - obstacle height
+            const top = Math.random() * maxTop;
+            
+            // Set initial position
+            if (fromLeft) {
+                obstacle.style.left = '-40px'; // Start just outside left edge
+            } else {
+                obstacle.style.left = '600px'; // Start just outside right edge
+            }
+            obstacle.style.top = top + 'px';
+            
+            gameContainer.appendChild(obstacle);
+            
+            return {
+                element: obstacle,
+                x: fromLeft ? -20 : 600,
+                y: top,
+                height: height,
+                fromLeft: fromLeft,
+                width: 20  // Updated width
+            };
+        }
+
+        // Add this function to update obstacles
+        function updateObstacles() {
+            if (!gameActive || questionActive) return;
+            
+            obstacles.forEach((obstacle, index) => {
+                // Move obstacle
+                if (obstacle.fromLeft) {
+                    obstacle.x += OBSTACLE_SPEED;
+                } else {
+                    obstacle.x -= OBSTACLE_SPEED;
+                }
+                
+                // Update position
+                obstacle.element.style.left = obstacle.x + 'px';
+                
+                // Check if obstacle is off screen
+                if (obstacle.fromLeft && obstacle.x > 600 || 
+                    !obstacle.fromLeft && obstacle.x < -20) { // Updated for new width
+                    obstacle.element.remove();
+                    obstacles.splice(index, 1);
+                    return;
+                }
+                
+                // Check collision with player
+                const playerCenterX = playerX + 30;
+                const playerCenterY = playerY + 30;
+                
+                // Calculate closest point on obstacle to player center
+                const closestX = Math.max(obstacle.x, Math.min(playerCenterX, obstacle.x + obstacle.width));
+                const closestY = Math.max(obstacle.y, Math.min(playerCenterY, obstacle.y + obstacle.height));
+                
+                // Calculate distance between closest point and player center
+                const distance = Math.sqrt(
+                    Math.pow(playerCenterX - closestX, 2) + 
+                    Math.pow(playerCenterY - closestY, 2)
+                );
+                
+                // Reduced collision radius for more precise hitbox
+                if (distance < 25) { // Reduced from 30
+                    showQuestion((isCorrect) => {
+                        if (!isCorrect) {
+                            playerHealth--;
+                            updateHearts();
+
+                            if (playerHealth <= 0) {
+                                gameActive = false;
+                                alert(`Học hành kiểu gì đấy hả!? Chỉ tập trung được mỗi ${score} giây!`);
+                                location.reload();
+                            }
+                        }
+                    });
+                    
+                    // Remove the obstacle after collision
+                    obstacle.element.remove();
+                    obstacles.splice(index, 1);
+                }
+            });
+        }
+
+        // Add obstacle spawning to your game loop
+        setInterval(() => {
+            if (gameActive && !questionActive) {
+                // Randomly decide if obstacle comes from left or right
+                const fromLeft = Math.random() < 0.5;
+                obstacles.push(createObstacle(fromLeft));
+            }
+        }, OBSTACLE_SPAWN_INTERVAL);
+
+        // Modified game loop
+        setInterval(() => {
+            if (gameActive) {
+                updatePlayerPosition();
+                updateBullets();
+                updateObstacles();
+                updateScore();
+            }
+        }, 16);
+
+        setInterval(() => {
+            if (gameActive) {
+                bossAttack();
+            }
+        }, 1000);
+
+        startButton.addEventListener('click', () => {
+            startScreen.style.display = 'none';
+            gameActive = true;
+            gameStartTime = Date.now(); // Reset the game start time
+            obstacles = []; // Clear any existing obstacles
+        });
+
+        document.getElementById('nextPageButton').addEventListener('click', () => {
+            window.location.href = 'ducks3 (2).html'; 
+        });
+
+        // Add this right after your existing script tag starts
+        document.addEventListener('DOMContentLoaded', () => {
+            // Create audio element
+            const bgMusic = document.createElement('audio');
+            bgMusic.src = 'https://github.com/Katto-cpu/Katto-cpu.github.io/raw/refs/heads/main/y2mate.com%20-%20Undertale%20%20Megalovania.mp3';
+            bgMusic.loop = true;
+            bgMusic.volume = 0.3; // Set volume to 30%
+            document.body.appendChild(bgMusic);
+            
+            // Create audio control button
+            const audioControl = document.createElement('button');
+            audioControl.innerHTML = '🔊';
+            audioControl.style.cssText = `
+                position: fixed;
+                bottom: 20px;
+                right: 20px;
+                z-index: 1000;
+                padding: 10px;
+                border: none;
+                border-radius: 50%;
+                background: rgba(255, 255, 255, 0.7);
+                cursor: pointer;
+                transition: all 0.3s ease;
+            `;
+            
+            document.body.appendChild(audioControl);
+            
+            // Handle play/pause
+            let isPlaying = false;
+            audioControl.addEventListener('click', () => {
+                if (isPlaying) {
+                    bgMusic.pause();
+                    audioControl.innerHTML = '🔈';
+                } else {
+                    bgMusic.play();
+                    audioControl.innerHTML = '🔊';
+                }
+                isPlaying = !isPlaying;
+            });
+            
+            // Try to play audio when user interacts with page
+            document.addEventListener('click', () => {
+                bgMusic.play()
+                    .then(() => {
+                        isPlaying = true;
+                        audioControl.innerHTML = '🔊';
+                    })
+                    .catch(err => console.log('Autoplay prevented'));
+            }, { once: true });
+
+            // Add hover effect to audio control
+            audioControl.addEventListener('mouseover', () => {
+                audioControl.style.transform = 'scale(1.1)';
+                audioControl.style.background = 'rgba(255, 255, 255, 0.9)';
+            });
+
+            audioControl.addEventListener('mouseout', () => {
+                audioControl.style.transform = 'scale(1)';
+                audioControl.style.background = 'rgba(255, 255, 255, 0.7)';
+            });
+        });
+    </script>
+</body>
+</html>

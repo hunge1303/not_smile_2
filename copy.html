@@ -1,0 +1,908 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Birthday Quest</title>
+    <style>
+        :root {
+            --bg-color: #2b1b10;
+            --text-color: #fdf5e6;
+            --accent: #d97736;
+            --success: #556b2f;
+            --error: #8b0000;
+            --node-bg: #3e2723;
+        }
+        body { 
+            font-family: 'Segoe UI', sans-serif;
+            background: radial-gradient(circle at center, #422816, #1a0f08);
+            color: var(--text-color);
+            margin: 0; display: flex; justify-content: center; align-items: center;
+            height: 100vh; overflow: hidden;
+            /* Removed global onkeydown to fix Wordle bug */
+        }
+        
+        #bg-canvas { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; z-index: -1; pointer-events: none; }
+
+        .screen { display: none; text-align: center; width: 95%; max-width: 800px; position: relative; z-index: 10; }
+        .active { display: block; animation: fadeIn 0.5s; }
+        
+        button {
+            padding: 12px 24px; font-size: 1rem; cursor: pointer;
+            background: var(--accent); border: none; color: white;
+            border-radius: 5px; margin-top: 20px; transition: 0.3s; font-weight: bold;
+        }
+        button:hover { filter: brightness(1.1); }
+
+        .level-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; margin-top: 20px; }
+        .level-node {
+            padding: 20px; background: var(--node-bg); border: 2px solid #5d4037;
+            cursor: pointer; border-radius: 8px; transition: 0.2s; font-weight: bold;
+        }
+        .level-node:hover { background: #4e342e; }
+        .level-node.completed { background: var(--success) !important; border-color: #8fbc8f; pointer-events: none; }
+        #boss-node { background: #3e1010; border: 2px solid #ff4444; display: none; grid-column: span 3; text-shadow: 0 0 5px red; }
+
+        #tutorial-modal {
+            display: none; position: fixed; top:0; left:0; width:100%; height:100%;
+            background: rgba(26, 15, 8, 0.85); z-index: 1000; justify-content: center; align-items: center;
+        }
+        #tutorial-modal.active { display: flex; animation: fadeIn 0.3s; }
+        .modal-content { max-width: 80%; max-height: 80%; border: 3px solid var(--accent); border-radius: 10px; box-shadow: 0 0 20px rgba(217, 119, 54, 0.5); }
+
+        #sudoku-board { display: grid; grid-template-columns: repeat(6, 45px); justify-content: center; margin: 20px auto; width: fit-content; border: 4px solid #fff; }
+        .sudoku-cell { width: 45px; height: 45px; text-align: center; font-size: 1.2rem; background: var(--node-bg); color: #fff; border: 1px solid #795548; outline: none; }
+        .s-border-right { border-right: 4px solid #fff; } 
+        .s-border-bottom { border-bottom: 4px solid #fff; }
+
+        .cryptic-box-container { display: flex; gap: 8px; justify-content: center; margin: 20px 0; }
+        .cryptic-char { width: 40px; height: 50px; background: transparent; border: 2px solid #8d6e63; color: white; text-align: center; font-size: 1.5rem; text-transform: uppercase; outline: none; border-radius: 4px; }
+        .cryptic-char:focus { border-color: var(--accent); box-shadow: 0 0 8px var(--accent); }
+
+        .w-grid { display: grid; gap: 5px; justify-content: center; margin-top: 20px; }
+        .w-row { display: grid; grid-template-columns: repeat(5, 45px); gap: 5px; }
+        .w-cell { border: 2px solid #5d4037; width: 45px; height: 45px; display: flex; align-items: center; justify-content: center; font-size: 1.5rem; font-weight: bold; text-transform: uppercase; }
+        .w-correct { background: #538d4e; border-color: #538d4e; }
+        .w-present { background: #b59f3b; border-color: #b59f3b; }
+        .w-absent { background: #3a3a3c; border-color: #3a3a3c; }
+
+        #ot-container { width: 600px; height: 400px; border: 2px solid var(--accent); position: relative; overflow: hidden; background: #1a0f08; margin: 0 auto; box-shadow: 0 0 15px rgba(0,0,0,0.8); }
+        #ot-player { width: 50px; height: 50px; position: absolute; z-index: 10; }
+        .ot-bullet { width: 10px; height: 10px; background: #ffd54f; position: absolute; border-radius: 50%; box-shadow: 0 0 8px #ffd54f; }
+        .ot-heart { width: 25px; height: 25px; background: #ff4444; position: absolute; clip-path: polygon(50% 0%, 100% 35%, 82% 100%, 50% 80%, 18% 100%, 0% 35%); filter: drop-shadow(0 0 5px red); }
+        .invulnerable { opacity: 0.4; }
+
+        .confetti { position: absolute; width: 10px; height: 10px; z-index: 1000; pointer-events: none; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    </style>
+</head>
+<body>
+
+    <canvas id="bg-canvas"></canvas>
+
+    <audio id="bg-music" loop><source src="https://github.com/Katto-cpu/Katto-cpu.github.io/raw/refs/heads/main/y2mate.com%20-%20Undertale%20%20Megalovania.mp3" type="audio/mpeg"></audio>
+    <button id="mute-btn" onclick="toggleMute()" style="position:fixed;bottom:18px;right:18px;z-index:9999;padding:8px 14px;font-size:1.1rem;background:#3e2723;border:2px solid var(--accent);border-radius:50px;margin:0;opacity:0.85;">🔊</button>
+    <div id="flash-overlay" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:white;z-index:5000;pointer-events:none;opacity:0;"></div>
+
+    <div id="tutorial-modal" onclick="this.classList.remove('active')">
+        <img src="YOUR_TUTORIAL_IMAGE_URL.jpg" alt="Tutorial Image" class="modal-content" onclick="event.stopPropagation()">
+    </div>
+
+    <div id="start-screen" class="screen active">
+        <h1 style="font-size: 3rem; text-shadow: 0 0 10px rgba(217, 119, 54, 0.5);">Birthday Quest</h1>
+        <button onclick="showScreen('main-page')">Enter the Hub</button>
+    </div>
+
+    <div id="main-page" class="screen">
+        <h2>Mission Hub</h2>
+        <div class="level-grid">
+            <div id="lvl-1" class="level-node" onclick="loadLevel(1)">1: The Maze</div>
+            <div id="lvl-2" class="level-node" onclick="loadLevel(2)">2: Mini Sudoku</div>
+            <div id="lvl-3" class="level-node" onclick="loadLevel(3)">3: Memory Match</div>
+            <div id="lvl-4" class="level-node" onclick="loadLevel(4)">4: The Cryptic</div>
+            <div id="lvl-5" class="level-node" onclick="loadLevel(5)">5: Wordle</div>
+            <div id="boss-node" class="level-node" onclick="loadLevel(6)">FINAL BOSS: OVERTALE</div>
+        </div>
+    </div>
+
+    <div id="game-screen" class="screen">
+        <h3 id="game-title" style="color: var(--accent);">Level</h3>
+        <div id="game-container"></div>
+        <p id="game-feedback" style="font-weight: bold; margin-top: 10px; min-height: 1.2em;"></p>
+        <div id="game-controls"></div>
+        <button onclick="showScreen('main-page')" style="background:#5d4037">Exit to Hub</button>
+    </div>
+
+    <div id="message-screen" class="screen">
+        <h1 id="msg-sender" style="color: var(--accent);">Friend</h1>
+        <p id="msg-body" style="font-size: 1.2rem;"></p>
+        <button onclick="showScreen('main-page')">Back to Hub</button>
+    </div>
+
+    <div id="final-reward" class="screen">
+        <div style="display:flex;justify-content:center;align-items:center;height:80vh;">
+            <img id="birthday-gif" src="YOUR_BIRTHDAY_GIF_URL.gif" alt="Happy Birthday!" style="max-width:90%;max-height:80vh;border-radius:12px;">
+        </div>
+    </div>
+
+    <script>
+        function initParticles() {
+            const canvas = document.getElementById('bg-canvas');
+            const ctx = canvas.getContext('2d');
+            let w = canvas.width = window.innerWidth;
+            let h = canvas.height = window.innerHeight;
+            const particles = [];
+
+            for (let i = 0; i < 60; i++) {
+                particles.push({
+                    x: Math.random() * w, y: Math.random() * h,
+                    r: Math.random() * 2 + 1,
+                    vx: Math.random() * 0.4 - 0.2, vy: Math.random() * 0.8 + 0.2,
+                    opacity: Math.random() * 0.5 + 0.1
+                });
+            }
+
+            function draw() {
+                ctx.clearRect(0, 0, w, h);
+                particles.forEach(p => {
+                    ctx.fillStyle = `rgba(255, 200, 100, ${p.opacity})`;
+                    ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2); ctx.fill();
+                    p.x += p.vx; p.y += p.vy;
+                    if (p.y > h) p.y = -10; if (p.x > w) p.x = -10; if (p.x < -10) p.x = w;
+                });
+                requestAnimationFrame(draw);
+            }
+            draw();
+            window.addEventListener('resize', () => { w = canvas.width = window.innerWidth; h = canvas.height = window.innerHeight; });
+        }
+        initParticles();
+
+        // --- Background Music ---
+        const bgMusic = document.getElementById('bg-music');
+        let musicStarted = false;
+        function startMusic() {
+            if (!musicStarted) {
+                bgMusic.volume = 0.4;
+                bgMusic.play().catch(()=>{});
+                musicStarted = true;
+            }
+        }
+        document.addEventListener('click', startMusic, { once: true });
+        document.addEventListener('keydown', startMusic, { once: true });
+        function toggleMute() {
+            bgMusic.muted = !bgMusic.muted;
+            document.getElementById('mute-btn').innerText = bgMusic.muted ? '🔇' : '🔊';
+        }
+        let finished = { 1:false, 2:false, 3:false, 4:false, 5:false, 6:false };
+        let activeLevel = 0;
+        let cleanupCurrentLevel = null;
+        
+        let wGuess = ""; let wRow = 0;
+        const friendMsgs = ["Path found!", "Perfect logic!", "You remember!", "Petrichor found!", "You SMILE!"];
+
+        function showScreen(id, fromLoadLevel) {
+            if (!fromLoadLevel) {
+                if (cleanupCurrentLevel) { cleanupCurrentLevel(); cleanupCurrentLevel = null; }
+                activeLevel = 0;
+            }
+            document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+            document.getElementById(id).classList.add('active');
+        }
+
+        function triggerConfetti() {
+            for (let i = 0; i < 50; i++) {
+                const c = document.createElement('div');
+                c.className = 'confetti';
+                c.style.left = Math.random() * 100 + 'vw';
+                c.style.backgroundColor = `hsl(${Math.random() * 60 + 20}, 100%, 60%)`;
+                document.body.appendChild(c);
+                c.animate([{ transform: 'translateY(0vh) rotate(0deg)', opacity: 1 }, { transform: `translateY(100vh) rotate(${Math.random()*720}deg)`, opacity: 0 }], { duration: 2000 + Math.random()*1000 }).onfinish = () => c.remove();
+            }
+        }
+
+        function winLevel(n) {
+            if (!finished[n]) {
+                finished[n] = true;
+                triggerConfetti();
+                document.getElementById('game-feedback').innerText = "CORRECT!";
+                document.getElementById('game-feedback').style.color = "var(--success)";
+                
+                if (n === 6) {
+                    // Bright flash transition to final reward
+                    setTimeout(() => {
+                        if (cleanupCurrentLevel) { cleanupCurrentLevel(); cleanupCurrentLevel = null; }
+                        activeLevel = 0;
+                        const overlay = document.getElementById('flash-overlay');
+                        overlay.style.display = 'block';
+                        overlay.style.transition = 'none';
+                        overlay.style.opacity = '0';
+                        requestAnimationFrame(() => {
+                            requestAnimationFrame(() => {
+                                overlay.style.transition = 'opacity 0.6s ease-in';
+                                overlay.style.opacity = '1';
+                                setTimeout(() => {
+                                    document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+                                    document.getElementById('final-reward').classList.add('active');
+                                    overlay.style.transition = 'opacity 1.8s ease-out';
+                                    overlay.style.opacity = '0';
+                                    setTimeout(() => { overlay.style.display = 'none'; }, 1900);
+                                }, 700);
+                            });
+                        });
+                    }, 1200);
+                    return;
+                }
+
+                setTimeout(() => {
+                    if (n <= 5) {
+                        completed++;
+                        document.getElementById('lvl-'+n).classList.add('completed');
+                        document.getElementById('msg-sender').innerText = "Friend " + n;
+                        document.getElementById('msg-body').innerText = friendMsgs[n-1];
+                        if (completed === 5) document.getElementById('boss-node').style.display = 'block';
+                        showScreen('message-screen');
+                    }
+                }, 1500);
+            }
+        }
+
+        function loadLevel(n) {
+            if (cleanupCurrentLevel) { cleanupCurrentLevel(); cleanupCurrentLevel = null; }
+            activeLevel = n;
+            
+            const container = document.getElementById('game-container');
+            const controls = document.getElementById('game-controls');
+            const feedback = document.getElementById('game-feedback');
+            
+            document.getElementById('game-title').innerText = "Level " + n;
+            feedback.innerText = "";
+            feedback.style.color = "var(--text-color)";
+            container.innerHTML = "";
+            controls.innerHTML = "";
+
+            if (n === 1) { 
+                container.innerHTML = `<div id="witness-container" style="background:var(--node-bg); padding:15px; border-radius:10px; display:inline-block;"><canvas id="w-canvas" width="300" height="300" style="background:#1a0f08; border-radius:5px; touch-action: none;"></canvas></div><p>Trace the path from Yellow to Red</p>`; 
+            }
+            if (n === 2) { 
+                container.innerHTML = `<div id="sudoku-board"></div>`; 
+                controls.innerHTML = `<button onclick="checkSudoku()">Check Answer</button>`; 
+            }
+            if (n === 3) { 
+                container.innerHTML = `<div class="mem-grid" id="mem-grid" style="display: grid; grid-template-columns: repeat(4, 80px); gap: 10px; justify-content: center; margin: 20px auto;"></div>`; 
+            }
+            if (n === 4) { 
+                container.innerHTML = `
+                    <button style="background: #795548; margin-bottom: 15px; padding: 8px 16px;" onclick="document.getElementById('tutorial-modal').classList.add('active')">How to Play</button>
+                    <p style="font-size: 1.2rem; font-style: italic;">"aroma from lab dish endless task (9)"</p>
+                    <div class="cryptic-box-container" id="cryptic-boxes"></div>
+                    <p style="font-size: 0.8rem; color: #aaa;">Type your answer and press Enter</p>`; 
+            }
+            if (n === 5) { 
+                container.innerHTML = `<div id="wordle-grid" class="w-grid"></div>`; 
+                wGuess = ""; wRow = 0; 
+            }
+            if (n === 6) { 
+                container.innerHTML = `
+                    <div id="ot-container">
+                        <div id="ot-timer" style="color:white; position:absolute; top:10px; right:10px; font-family:monospace; font-size:1.2rem;">120</div>
+                        <div id="ot-player"><img src="https://i.imgur.com/qCG5mB1.gif" width="100%"></div>
+                    </div>`; 
+            }
+            showScreen('game-screen', true);
+            if (n === 1) initWitness();
+            if (n === 2) initSudoku();
+            if (n === 3) initMemory();
+            if (n === 4) initCryptic();
+            if (n === 5) initWordle();
+            if (n === 6) initOvertale();
+        }
+
+        // --- Level 1: Witness ---
+        function initWitness() {
+            const c = document.getElementById('w-canvas');
+            const ctx = c.getContext('2d');
+
+            const sz = 3, sp = 80, off = 30;
+
+            // Dots in square centers: col 0=orange, col 1=blue
+            // Correct path (0,3)->(1,3)->(2,3)->(3,3)->(3,2)->(3,1)->(3,0) puts
+            // blue dots (top-left region) on left side, orange (bottom-right) on right.
+            const dots = [
+                {gx:0, gy:0, col:1}, {gx:1, gy:0, col:1},
+                {gx:0, gy:1, col:1}, {gx:1, gy:1, col:1},
+                {gx:0, gy:2, col:1},
+                {gx:2, gy:0, col:0}, {gx:2, gy:1, col:0},
+                {gx:1, gy:2, col:0}, {gx:2, gy:2, col:0},
+            ];
+
+            // Flood-fill on 2x-expanded grid to check dot segregation.
+            // Node (x,y) -> expanded cell (2x, 2y). Edge midpoints become blocked.
+            function checkDotSegregation(path) {
+                const G = 2 * sz + 1;
+                const blocked = Array.from({length:G}, () => new Array(G).fill(false));
+                for (let i = 0; i < path.length - 1; i++) {
+                    const a = path[i], b = path[i+1];
+                    blocked[2*a.y][2*a.x] = true;
+                    blocked[2*b.y][2*b.x] = true;
+                    blocked[a.y+b.y][a.x+b.x] = true; // edge midpoint
+                }
+                const region = Array.from({length:G}, () => new Array(G).fill(-1));
+                let rid = 0;
+                const dirs = [[0,1],[0,-1],[1,0],[-1,0]];
+                for (let sy = 0; sy < G; sy++) {
+                    for (let sx = 0; sx < G; sx++) {
+                        if (region[sy][sx] === -1 && !blocked[sy][sx]) {
+                            const q = [[sx,sy]]; region[sy][sx] = rid; let qi = 0;
+                            while (qi < q.length) {
+                                const [cx,cy] = q[qi++];
+                                for (const [dx,dy] of dirs) {
+                                    const nx=cx+dx, ny=cy+dy;
+                                    if (nx>=0&&nx<G&&ny>=0&&ny<G&&!blocked[ny][nx]&&region[ny][nx]===-1) {
+                                        region[ny][nx] = rid; q.push([nx,ny]);
+                                    }
+                                }
+                            }
+                            rid++;
+                        }
+                    }
+                }
+                const cr = [-1,-1];
+                for (const d of dots) {
+                    const r = region[2*d.gy+1][2*d.gx+1];
+                    if (cr[d.col] === -1) cr[d.col] = r;
+                    else if (cr[d.col] !== r) return false;
+                }
+                return cr[0] !== -1 && cr[1] !== -1 && cr[0] !== cr[1];
+            }
+
+            let drawing = false;
+            let path = [{x:0, y:sz}];
+
+            const draw = () => {
+                ctx.clearRect(0,0,300,300);
+
+                // Grid lines
+                ctx.strokeStyle = "#5d4037";
+                ctx.lineWidth = 12;
+                for(let i=0;i<=sz;i++){
+                    ctx.beginPath(); ctx.moveTo(off,i*sp+off); ctx.lineTo(sz*sp+off,i*sp+off); ctx.stroke();
+                    ctx.beginPath(); ctx.moveTo(i*sp+off,off); ctx.lineTo(i*sp+off,sz*sp+off); ctx.stroke();
+                }
+
+                // Dots in square centers
+                const dotColors = ["#d97736","#4a90e2"];
+                for (const d of dots) {
+                    ctx.fillStyle = dotColors[d.col];
+                    ctx.beginPath();
+                    ctx.arc((d.gx+0.5)*sp+off, (d.gy+0.5)*sp+off, 9, 0, Math.PI*2);
+                    ctx.fill();
+                    ctx.strokeStyle = "rgba(255,255,255,0.35)";
+                    ctx.lineWidth = 2;
+                    ctx.stroke();
+                }
+
+                // Start (orange) and end (red) nodes
+                ctx.fillStyle = "#d97736";
+                ctx.beginPath(); ctx.arc(off, sz*sp+off, 18, 0, Math.PI*2); ctx.fill();
+                ctx.fillStyle = "#8b0000";
+                ctx.beginPath(); ctx.arc(sz*sp+off, off, 18, 0, Math.PI*2); ctx.fill();
+
+                // Path
+                ctx.strokeStyle = "#d97736";
+                ctx.lineWidth = 8;
+                ctx.beginPath();
+                ctx.moveTo(path[0].x*sp+off, path[0].y*sp+off);
+                path.forEach(p => ctx.lineTo(p.x*sp+off, p.y*sp+off));
+                ctx.stroke();
+            };
+
+            const pointerDown = (e) => {
+                const r = c.getBoundingClientRect();
+
+                const x = e.clientX - r.left;
+                const y = e.clientY - r.top;
+
+                if (Math.hypot(x - off, y - (sz*sp+off)) < 40) {
+                    drawing = true;
+
+                    // IMPORTANT FIX
+                    c.setPointerCapture(e.pointerId);
+                }
+            };
+
+            const pointerMove = (e) => {
+                if(!drawing) return;
+
+                const r = c.getBoundingClientRect();
+
+                const cx = e.clientX - r.left;
+                const cy = e.clientY - r.top;
+
+                const gx = Math.round((cx-off)/sp);
+                const gy = Math.round((cy-off)/sp);
+
+                if(gx>=0 && gx<=sz && gy>=0 && gy<=sz){
+
+                    const l = path[path.length-1];
+
+                    if(
+                        (gx !== l.x || gy !== l.y) &&
+                        Math.abs(gx-l.x) + Math.abs(gy-l.y) === 1
+                    ){
+
+                        if(Math.hypot(cx-(gx*sp+off), cy-(gy*sp+off)) < 40){
+
+                            if(
+                                path.length > 1 &&
+                                path[path.length-2].x === gx &&
+                                path[path.length-2].y === gy
+                            ){
+                                path.pop();
+                            } else {
+                                path.push({x:gx,y:gy});
+                            }
+
+                            if(gx===sz && gy===0){
+                                drawing = false;
+                                const fb = document.getElementById('game-feedback');
+                                if (checkDotSegregation(path)) {
+                                    winLevel(1);
+                                } else {
+                                    fb.innerText = "Dots not separated! Try again.";
+                                    fb.style.color = "var(--error)";
+                                    path = [{x:0, y:sz}];
+                                }
+                            }
+                        }
+                    }
+                }
+
+                draw();
+            };
+
+            const pointerUp = () => {
+                drawing = false;
+
+                if(!finished[1]){
+                    path = [{x:0,y:sz}];
+                }
+
+                draw();
+            };
+
+            c.addEventListener('pointerdown', pointerDown);
+            c.addEventListener('pointermove', pointerMove);
+            c.addEventListener('pointerup', pointerUp);
+
+            draw();
+
+            cleanupCurrentLevel = () => {
+                c.removeEventListener('pointerdown', pointerDown);
+                c.removeEventListener('pointermove', pointerMove);
+                c.removeEventListener('pointerup', pointerUp);
+            };
+        }
+
+        // --- Level 2: Sudoku ---
+        const sudokuSol = [1,2,3,4,5,6, 4,5,6,1,2,3, 2,3,1,5,6,4, 5,6,4,2,3,1, 3,1,2,6,4,5, 6,4,5,3,1,2];
+        const sudokuPuz = [1,0,3,0,5,0, 0,5,0,1,0,3, 0,0,1,0,0,4, 5,0,0,2,0,0, 0,1,0,0,4,0, 0,4,0,3,0,2];
+        function initSudoku() {
+            const b = document.getElementById('sudoku-board');
+            for(let i=0; i<36; i++) {
+                let cell = document.createElement('input'); cell.className = 'sudoku-cell'; cell.maxLength=1;
+                if((i+1)%3 === 0 && (i+1)%6 !== 0) cell.classList.add('s-border-right');
+                if(Math.floor(i/6) === 1 || Math.floor(i/6) === 3) cell.classList.add('s-border-bottom');
+                if(sudokuPuz[i] !== 0) { cell.value = sudokuPuz[i]; cell.disabled = true; cell.style.color = "#a07a63"; }
+                cell.oninput = (e) => cell.value = cell.value.replace(/[^1-6]/g, '');
+                b.appendChild(cell);
+            }
+        }
+        function checkSudoku() {
+            const inputs = document.querySelectorAll('.sudoku-cell'), fb = document.getElementById('game-feedback');
+            let match = true, full = true;
+            inputs.forEach((inp, i) => { if(inp.value === "") full = false; else if(parseInt(inp.value) !== sudokuSol[i]) match = false; });
+            if(!full) { fb.innerText = "Fill all squares!"; fb.style.color = "var(--text-color)"; }
+            else if(!match) { fb.innerText = "Incorrect logic. Try again."; fb.style.color = "var(--error)"; }
+            else winLevel(2);
+        }
+
+        // --- Level 3: Memory Game ---
+        function initMemory() {
+            const g = document.getElementById('mem-grid'), colors = ["#d97736","#556b2f","#4a90e2","#ffd54f","#8b0000","#795548"];
+            let cards = [...colors, ...colors].sort(()=>Math.random()-.5), flipped = [];
+            let matchedCount = 0; // Proper Match Counter Implementation
+
+            cards.forEach(c => {
+                let d = document.createElement('div');
+                d.className = 'mem-card';
+                d.style.cssText = "width:80px; height:80px; position:relative; transform-style:preserve-3d; transition:transform 0.4s; cursor:pointer;";
+                d.innerHTML = `
+                    <div style="position:absolute;width:100%;height:100%;backface-visibility:hidden;background:var(--node-bg);border:2px solid #5d4037;border-radius:8px;"></div>
+                    <div class="back-face" style="position:absolute;width:100%;height:100%;backface-visibility:hidden;background:${c};transform:rotateY(180deg);border:2px solid #fff;border-radius:8px;"></div>
+                `;
+                
+                d.onclick = () => { 
+                    if(flipped.length < 2 && !d.classList.contains('flipped') && !d.classList.contains('matched')) { 
+                        d.style.transform = 'rotateY(180deg)'; 
+                        d.classList.add('flipped');
+                        flipped.push(d); 
+                        
+                        if(flipped.length === 2) { 
+                            if(flipped[0].querySelector('.back-face').style.background === flipped[1].querySelector('.back-face').style.background) { 
+                                flipped[0].classList.add('matched');
+                                flipped[1].classList.add('matched');
+                                flipped = []; 
+                                matchedCount++;
+                                if(matchedCount === 6) winLevel(3); // Direct win condition check
+                            } else { 
+                                setTimeout(() => { 
+                                    flipped.forEach(x => {
+                                        x.style.transform = ''; 
+                                        x.classList.remove('flipped');
+                                    }); 
+                                    flipped = []; 
+                                }, 800); 
+                            } 
+                        } 
+                    } 
+                };
+                g.appendChild(d);
+            });
+        }
+
+        // --- Level 4: Cryptic ---
+        function initCryptic() {
+            const c = document.getElementById('cryptic-boxes'), fb = document.getElementById('game-feedback');
+            for(let i=0; i<9; i++) {
+                let inp = document.createElement('input'); inp.className = 'cryptic-char'; inp.maxLength = 1;
+                inp.oninput = (e) => { inp.value = inp.value.replace(/[^a-zA-Z]/g, ''); if(e.target.value && i<8) c.children[i+1].focus(); };
+                inp.onkeydown = (e) => { 
+                    if(e.key === "Enter") { if(Array.from(c.children).map(x=>x.value).join("").toUpperCase() === "PETRICHOR") winLevel(4); else { fb.innerText = "INCORRECT"; fb.style.color="var(--error)"; } }
+                    if(e.key === "Backspace" && !e.target.value && i>0) c.children[i-1].focus();
+                };
+                c.appendChild(inp);
+            }
+            setTimeout(() => c.children[0].focus(), 100);
+        }
+
+        // --- Level 5: Wordle ---
+        function initWordle() {
+
+            const g = document.getElementById('wordle-grid');
+
+            g.innerHTML = "";
+
+            for(let i=0; i<6; i++) {
+
+                let row = document.createElement('div');
+                row.className = 'w-row';
+
+                for(let j=0; j<5; j++) {
+
+                    let c = document.createElement('div');
+                    c.className = 'w-cell';
+
+                    row.appendChild(c);
+                }
+
+                g.appendChild(row);
+            }
+
+            wGuess = "";
+            wRow = 0;
+
+            const target = "SMILE";
+
+            const handleWordleInput = (e) => {
+
+                if(activeLevel !== 5) return;
+
+                const rows = document.querySelectorAll('.w-row');
+
+                if(wRow >= 6) return;
+
+                const cells = rows[wRow].querySelectorAll('.w-cell');
+
+                if(e.key === "Enter") {
+
+                    if(wGuess.length !== 5) return;
+
+                    let tArr = target.split("");
+
+                    for(let i=0;i<5;i++){
+
+                        if(wGuess[i] === tArr[i]){
+
+                            cells[i].classList.add('w-correct');
+                            tArr[i] = null;
+                        }
+                    }
+
+                    for(let i=0;i<5;i++){
+
+                        if(!cells[i].classList.contains('w-correct')){
+
+                            let idx = tArr.indexOf(wGuess[i]);
+
+                            if(idx > -1){
+
+                                cells[i].classList.add('w-present');
+                                tArr[idx] = null;
+
+                            } else {
+
+                                cells[i].classList.add('w-absent');
+                            }
+                        }
+                    }
+
+                    if(wGuess === target){
+
+                        winLevel(5);
+
+                    } else {
+
+                        wRow++;
+                        wGuess = "";
+                    }
+
+                    return;
+                }
+
+                if(e.key === "Backspace") {
+
+                    if(wGuess.length === 0) return;
+
+                    wGuess = wGuess.slice(0, -1);
+
+                    cells[wGuess.length].innerText = "";
+
+                    return;
+                }
+
+                if(/^[a-zA-Z]$/.test(e.key)) {
+
+                    if(wGuess.length >= 5) return;
+
+                    cells[wGuess.length].innerText = e.key.toUpperCase();
+
+                    wGuess += e.key.toUpperCase();
+                }
+            };
+
+            // IMPORTANT FIXES
+            window.addEventListener('keydown', handleWordleInput);
+
+            // Force keyboard focus
+            window.focus();
+
+            cleanupCurrentLevel = () => {
+                window.removeEventListener('keydown', handleWordleInput);
+            };
+        }
+
+        // --- Level 6: Overtale ---
+        function initOvertale() {
+            const cont = document.getElementById('ot-container'), p = document.getElementById('ot-player');
+            let px=275, py=175, collectedHearts=0, projectiles=[], start=Date.now(), live=true, keys={};
+            let lives=3, invulTimer=0;
+            let patternTimer=0, currentPattern=0, patternPhase=0;
+
+            // Lives display
+            const livesEl = document.createElement('div');
+            livesEl.id = 'ot-lives';
+            livesEl.style.cssText = 'position:absolute;top:10px;left:10px;font-size:1.2rem;color:#ff4444;letter-spacing:3px;z-index:20;';
+            function renderLives() { livesEl.innerText = '❤️'.repeat(lives) + '🖤'.repeat(3-lives); }
+            renderLives();
+            cont.appendChild(livesEl);
+
+            // Pattern label
+            const patLabel = document.createElement('div');
+            patLabel.style.cssText = 'position:absolute;bottom:8px;left:50%;transform:translateX(-50%);font-size:0.75rem;color:rgba(255,200,100,0.5);letter-spacing:1px;z-index:20;font-family:monospace;';
+            cont.appendChild(patLabel);
+
+            const kDown = (e) => keys[e.key] = true; const kUp = (e) => keys[e.key] = false;
+            window.addEventListener('keydown', kDown); window.addEventListener('keyup', kUp);
+
+            function spawnH() {
+                let h = document.createElement('div'); h.className = 'ot-heart';
+                let x = 30 + Math.random()*520, y = 30 + Math.random()*310;
+                h.style.left = x+'px'; h.style.top = y+'px'; cont.appendChild(h); return {el:h, x, y};
+            }
+            let trg = spawnH();
+
+            // ---------- Projectile factory ----------
+            function makeProj(type, x, y, vx, vy, extra) {
+                const el = document.createElement('div');
+                el.style.position = 'absolute';
+                el.style.zIndex = '5';
+                if (type === 'bullet') {
+                    el.style.cssText += 'width:10px;height:10px;background:#ffd54f;border-radius:50%;box-shadow:0 0 8px #ffd54f;position:absolute;';
+                } else if (type === 'laser') {
+                    // Horizontal or vertical thin bar
+                    if (extra.dir === 'h') {
+                        el.style.cssText += `width:600px;height:4px;background:linear-gradient(90deg,transparent,#ff4444,transparent);box-shadow:0 0 10px #ff4444;position:absolute;left:0px;top:${y}px;opacity:0;`;
+                    } else {
+                        el.style.cssText += `width:4px;height:400px;background:linear-gradient(180deg,transparent,#ff4444,transparent);box-shadow:0 0 10px #ff4444;position:absolute;left:${x}px;top:0px;opacity:0;`;
+                    }
+                } else if (type === 'homing') {
+                    el.style.cssText += 'width:12px;height:12px;background:#c060ff;border-radius:50%;box-shadow:0 0 12px #c060ff;position:absolute;';
+                } else if (type === 'orb') {
+                    el.style.cssText += 'width:18px;height:18px;background:radial-gradient(circle,#fff 10%,#4af 60%,transparent 100%);border-radius:50%;box-shadow:0 0 14px #4af;position:absolute;';
+                }
+                cont.appendChild(el);
+                return {el, type, x, y, vx, vy, extra: extra||{}, age:0};
+            }
+
+            // ---------- Attack patterns ----------
+            const PATTERNS = ['RAIN','SWEEP','SPIRAL','AIMED','LASER GRID'];
+            function triggerPattern(idx) {
+                patLabel.innerText = '— ' + PATTERNS[idx] + ' —';
+                setTimeout(()=>{ patLabel.innerText=''; }, 1400);
+                patternPhase = 0;
+            }
+
+            function spawnPatternProjectiles(idx, phase) {
+                if (idx === 0) {
+                    // RAIN: dense vertical rain from random x
+                    if (phase % 2 === 0) {
+                        for (let i=0; i<5; i++) {
+                            const bx = Math.random()*590;
+                            projectiles.push(makeProj('bullet', bx, -10, 0, 4+Math.random()*2));
+                        }
+                    }
+                } else if (idx === 1) {
+                    // SWEEP: horizontal sweeping line of bullets
+                    if (phase % 4 === 0) {
+                        const rows = [80, 160, 240, 320];
+                        rows.forEach(ry => {
+                            projectiles.push(makeProj('orb', -15, ry, 6, 0));
+                        });
+                    }
+                } else if (idx === 2) {
+                    // SPIRAL: bullets emanating from centre in rotating angles
+                    if (phase % 3 === 0) {
+                        const cx=300, cy=200, arms=6;
+                        const angleOffset = (phase/3) * (Math.PI/arms);
+                        for (let a=0; a<arms; a++) {
+                            const angle = (a/arms)*Math.PI*2 + angleOffset;
+                            projectiles.push(makeProj('bullet', cx, cy, Math.cos(angle)*5, Math.sin(angle)*5));
+                        }
+                    }
+                } else if (idx === 3) {
+                    // AIMED: homing-ish bullets fired toward player position
+                    if (phase % 8 === 0) {
+                        const sides = [[0,Math.random()*400],[600,Math.random()*400],[Math.random()*600,0],[Math.random()*600,400]];
+                        const [sx,sy] = sides[Math.floor(Math.random()*sides.length)];
+                        const dx = (px+25)-sx, dy = (py+25)-sy;
+                        const dist = Math.hypot(dx,dy)||1;
+                        const spd = 4.5;
+                        projectiles.push(makeProj('homing', sx, sy, (dx/dist)*spd, (dy/dist)*spd));
+                    }
+                    // Extra loose bullets
+                    if (phase % 5 === 0) {
+                        projectiles.push(makeProj('bullet', Math.random()*600, -10, (Math.random()-0.5)*3, 3+Math.random()*2));
+                    }
+                } else if (idx === 4) {
+                    // LASER GRID: flash warnings then fire laser bars
+                    if (phase === 0 || phase === 30) {
+                        const ly = Math.floor(Math.random()*3)*100 + 50;
+                        const lx = Math.floor(Math.random()*3)*150 + 50;
+                        const hProj = makeProj('laser', 0, ly, 0, 0, {dir:'h', warningEnd: Date.now()+600});
+                        const vProj = makeProj('laser', lx, 0, 0, 0, {dir:'v', warningEnd: Date.now()+600});
+                        projectiles.push(hProj, vProj);
+                    }
+                }
+            }
+
+            const loop = setInterval(() => {
+                if (!live || activeLevel !== 6) return clearInterval(loop);
+                const elapsed = Math.floor((Date.now()-start)/1000);
+                document.getElementById('ot-timer').innerText = 120-elapsed;
+                if (elapsed >= 120) { live=false; alert("Time Up!"); loadLevel(6); return; }
+
+                // Invul tick
+                if (invulTimer > 0) invulTimer--;
+                const isInvul = invulTimer > 0 || !!keys['Shift'];
+                p.style.opacity = isInvul ? (Math.floor(invulTimer/5)%2===0 ? 0.3 : 0.85) : 1;
+
+                // Movement
+                const speed = keys['Shift'] ? 9 : 5;
+                if (keys['ArrowUp'])    py = Math.max(0, py-speed);
+                if (keys['ArrowDown'])  py = Math.min(350, py+speed);
+                if (keys['ArrowLeft'])  px = Math.max(0, px-speed);
+                if (keys['ArrowRight']) px = Math.min(550, px+speed);
+                p.style.left = px+'px'; p.style.top = py+'px';
+
+                // Heart collect
+                if (Math.hypot(px-trg.x, py-trg.y) < 40) {
+                    trg.el.remove(); collectedHearts++;
+                    if (collectedHearts < 5) trg = spawnH(); else { live=false; winLevel(6); return; }
+                }
+
+                // Pattern cycling: switch every ~4s (200 ticks @ 20ms)
+                patternTimer++;
+                if (patternTimer % 200 === 0) {
+                    currentPattern = (currentPattern+1) % PATTERNS.length;
+                    triggerPattern(currentPattern);
+                }
+                spawnPatternProjectiles(currentPattern, patternPhase++);
+
+                // Update projectiles
+                for (let i = projectiles.length-1; i >= 0; i--) {
+                    const b = projectiles[i];
+                    b.age++;
+
+                    if (b.type === 'laser') {
+                        const now = Date.now();
+                        const warn = b.extra.warningEnd;
+                        if (now < warn) {
+                            // Warning phase: flicker
+                            b.el.style.opacity = (Math.floor(b.age/4)%2===0) ? '0.35' : '0';
+                        } else if (now < warn + 400) {
+                            // Active phase
+                            b.el.style.opacity = '0.9';
+                            if (!isInvul) {
+                                // Check collision
+                                if (b.extra.dir === 'h') {
+                                    const ly = parseFloat(b.el.style.top);
+                                    if (Math.abs((py+25) - ly) < 20) {
+                                        lives--; renderLives(); invulTimer=90;
+                                        if (lives<=0) { live=false; alert("Game Over!"); loadLevel(6); return; }
+                                    }
+                                } else {
+                                    const lx = parseFloat(b.el.style.left);
+                                    if (Math.abs((px+25) - lx) < 20) {
+                                        lives--; renderLives(); invulTimer=90;
+                                        if (lives<=0) { live=false; alert("Game Over!"); loadLevel(6); return; }
+                                    }
+                                }
+                            }
+                        } else {
+                            b.el.remove(); projectiles.splice(i, 1); continue;
+                        }
+                        continue;
+                    }
+
+                    // Move projectile
+                    b.x += b.vx; b.y += b.vy;
+                    b.el.style.left = b.x+'px'; b.el.style.top = b.y+'px';
+
+                    // Homing: gently steer toward player each tick
+                    if (b.type === 'homing' && b.age < 120) {
+                        const dx = (px+25)-b.x, dy = (py+25)-b.y;
+                        const dist = Math.hypot(dx,dy)||1;
+                        b.vx += (dx/dist)*0.18; b.vy += (dy/dist)*0.18;
+                        const spd = Math.hypot(b.vx,b.vy);
+                        if (spd > 5.5) { b.vx = b.vx/spd*5.5; b.vy = b.vy/spd*5.5; }
+                    }
+
+                    // Off-screen cull
+                    if (b.x < -30 || b.x > 640 || b.y < -30 || b.y > 430) {
+                        b.el.remove(); projectiles.splice(i, 1); continue;
+                    }
+
+                    // Collision (non-laser)
+                    if (!isInvul) {
+                        const hitR = b.type === 'orb' ? 28 : (b.type === 'homing' ? 20 : 18);
+                        if (Math.hypot(px+25-b.x, py+25-b.y) < hitR) {
+                            lives--; renderLives(); invulTimer = 90;
+                            b.el.remove(); projectiles.splice(i, 1);
+                            if (lives<=0) { live=false; alert("Game Over!"); loadLevel(6); return; }
+                        }
+                    }
+                }
+            }, 20);
+
+            // Trigger first pattern label
+            triggerPattern(0);
+
+            cleanupCurrentLevel = () => {
+                clearInterval(loop);
+                window.removeEventListener('keydown', kDown);
+                window.removeEventListener('keyup', kUp);
+            };
+        }
+    </script>
+</body>
+</html>
